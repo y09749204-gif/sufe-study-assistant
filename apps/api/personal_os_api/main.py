@@ -17,8 +17,9 @@ from .setup_api import router as setup
 from .connections import router as connections
 from .kzkt_queue import router as queue
 from .components import router as components
+from .onboarding import router as onboarding
 
-app=FastAPI(title='上财学业助手',version='0.1.0.dev0')
+app=FastAPI(title='上财学业助手',version='0.1.0.dev2')
 
 
 @app.middleware('http')
@@ -80,6 +81,6 @@ def update_task(task_id:UUID,body:TaskChange,db=Depends(get_db)):
     db.commit();return {'id':str(task.id),'status':task.status}
 
 
-for router in (setup,connections,academics,calendar,queue,components):app.include_router(router)
+for router in (setup,connections,academics,calendar,queue,components,onboarding):app.include_router(router)
 web=Path(os.environ.get('SUFE_WEB_DIR',str(Path(__file__).resolve().parents[2]/'web/out')))
 if web.exists():app.mount('/',StaticFiles(directory=web,html=True),name='web')

@@ -54,3 +54,5 @@ python scripts/check-artifact.py dist/win-unpacked
 ```
 
 冒烟测试使用新建的临时用户目录；它验证运行时与 API，不替代全新 Windows 的安装、卸载及真实账号验收。
+
+Windows 已准备 runtime 和 Web 构建后，可运行 `node scripts/test-onboarding.mjs` 验证完整向导。测试使用新临时目录与虚构课程，结束后停止自建服务。用 `SUFE_TEST_BROWSER` 指定本机 Chrome／Edge 路径，否则使用 Playwright 已安装的 Chromium。可用 `SUFE_TEST_SCREENSHOTS` 指定界面截图输出目录。

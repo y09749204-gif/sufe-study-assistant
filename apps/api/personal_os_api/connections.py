@@ -112,3 +112,9 @@ def capture_wecom():
     result=subprocess.run([sys.executable,str(ROOT/'scripts/capture-wecom.py')],cwd=ROOT,env={**os.environ,'PYTHONPATH':str(ROOT/'apps/api')},capture_output=True,timeout=300,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if result.returncode:raise RuntimeError('企微只读同步失败：请检查账号身份、密钥和客户端版本')
     return data_root()/'wecom/evidence.sqlite'
+
+
+@router.post("/kzkt/check")
+def check_kzkt():
+    try:return start_browser("kzkt", "status")
+    except RuntimeError as e:raise HTTPException(409,str(e))

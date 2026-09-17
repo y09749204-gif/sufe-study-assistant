@@ -13,6 +13,7 @@ app.whenReady().then(()=>{
  window=new BrowserWindow({width:1280,height:860,minWidth:580,minHeight:600,title:'上财学业助手',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  window.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<meta charset="utf-8"><body style="font:16px system-ui;padding:50px;background:#f5f6f2"><h1>上财学业助手</h1><p>正在启动独立数据库和本机服务，首次启动需要片刻…</p></body>'));
  let buffer='',origin='';
+ ipcMain.handle('choose-directory',async event=>{if(event.sender!==window.webContents||!origin||new URL(event.senderFrame.url).origin!==origin)throw Error('Untrusted window');const result=await dialog.showOpenDialog(window,{title:'选择课程资料目录',properties:['openDirectory','createDirectory']});return result.canceled?null:result.filePaths[0]});
  host.stdout.on('data',chunk=>{buffer+=chunk;let n;while((n=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,n);buffer=buffer.slice(n+1);try{const msg=JSON.parse(line);if(msg.url){origin=new URL(msg.url).origin;window.loadURL(msg.url);}if(msg.error)dialog.showErrorBox('启动失败',msg.error);}catch{}}});
  host.on('error',()=>dialog.showErrorBox('启动失败','运行环境未准备好。开发者请先运行 prepare-runtime.py。'));
  host.on('exit',code=>{if(code)dialog.showErrorBox('服务已退出','请查看应用数据目录中的 logs/host.log。')});
