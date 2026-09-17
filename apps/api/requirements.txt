@@ -1,0 +1,17 @@
+alembic==1.13.2
+fastapi==0.112.2
+psycopg[binary]==3.2.1
+pypdf==6.1.1
+pywin32==311; sys_platform == "win32"
+pydantic==2.8.2
+pydantic-settings==2.4.0
+httpx==0.28.1
+SQLAlchemy==2.0.32
+uvicorn[standard]==0.30.6
+requests==2.34.2
+opencv-python==4.10.0.84
+PyMuPDF==1.24.10
+Pillow==10.4.0
+rapidocr-onnxruntime==1.4.4
+tzdata==2025.2
+cryptography==50.0.1

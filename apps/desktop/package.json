@@ -1,0 +1,87 @@
+{
+  "name": "sufe-study-assistant",
+  "version": "0.1.0-dev.1",
+  "private": true,
+  "description": "上财学业助手 — 本地课程、日历与课堂复盘",
+  "author": "Sufe Study Assistant contributors",
+  "license": "AGPL-3.0-only",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.2.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "io.github.sufe-study-assistant",
+    "productName": "Sufe Study Assistant",
+    "directories": {
+      "output": "../../dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "../../runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/Scripts/**"
+        ]
+      },
+      {
+        "from": "../api/personal_os_api",
+        "to": "app/apps/api/personal_os_api",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../web/out",
+        "to": "app/apps/web/out"
+      },
+      {
+        "from": "../../scripts",
+        "to": "app/scripts",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "../../integrations",
+        "to": "app/integrations",
+        "filter": [
+          "**/*",
+          "!**/.cache/**"
+        ]
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true
+    }
+  }
+}

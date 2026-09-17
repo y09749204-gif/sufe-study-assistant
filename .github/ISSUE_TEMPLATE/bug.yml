@@ -1,0 +1,19 @@
+name: 问题反馈
+description: 报告可以复现的错误，请勿附带个人数据
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 发生了什么
+      description: 写明操作步骤、期望结果与实际结果。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本、Windows 版本、相关客户端版本
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏诊断
+      description: 不要上传密钥、Cookie、真实课件、聊天数据库或完整回放。

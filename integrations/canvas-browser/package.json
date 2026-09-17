@@ -1,0 +1,14 @@
+{
+  "name": "personal-os-canvas-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "node cli.mjs login",
+    "sync": "node cli.mjs sync",
+    "status": "node cli.mjs status"
+  },
+  "dependencies": {
+    "playwright-core": "1.58.2"
+  }
+}
