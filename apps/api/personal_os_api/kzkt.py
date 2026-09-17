@@ -396,7 +396,7 @@ def create_assignment_candidates(db: Session, recording: CourseRecording, summar
     return created
 
 
-def process_recording(db: Session, recording: CourseRecording) -> dict:
+def process_recording(db: Session, recording: CourseRecording, *, transcript_only: bool = False) -> dict:
     source = "platform_subtitle"
     extracted = transcript_from_subtitle(recording)
     if not extracted:
@@ -411,7 +411,7 @@ def process_recording(db: Session, recording: CourseRecording) -> dict:
             model_name=None if source == "platform_subtitle" else get_settings().kzkt_whisper_model)
         db.add(transcript); db.flush()
     db.commit()  # Keep expensive transcription even when summary generation fails.
-    if get_settings().values.get("ai",{}).get("provider","none")=="none":
+    if transcript_only or get_settings().values.get("ai",{}).get("provider","none")=="none":
         return {"recording_id":str(recording.id),"status":"transcript_ready"}
     from .kzkt_queue import enqueue_requirements
     enqueue_requirements(db, recording_id=recording.id)

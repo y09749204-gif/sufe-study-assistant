@@ -79,15 +79,15 @@ def add_manifest(db,parent,manifest):
         review=db.scalar(select(LessonReview).where(LessonReview.recording_id==record.id).order_by(LessonReview.created_at.desc())) if record else None
         done=review and review.model_name==model_identity() and review.summary.get('review_version')==REVIEW_VERSION and db.scalar(select(RecordingSlideSegment.id).where(RecordingSlideSegment.recording_id==record.id).limit(1))
         status='success' if done else 'queued' if valid else 'needs_confirmation'
-        db.add(Job(dedupe_key=key,course_id=parent.course_id,recording_id=record.id if record else None,external_id=item['external_id'],title=item.get('title') or parent.title,kind='recording',stage='complete' if done else 'download',status=status,batches=list(parent.batches),payload=item,taught_at=parse_time(item.get('taught_at')),finished_at=now() if done else None))
+        db.add(Job(dedupe_key=key,course_id=parent.course_id,recording_id=record.id if record else None,external_id=item['external_id'],title=item.get('title') or parent.title,kind='recording',stage='complete' if done else 'text',status=status,batches=list(parent.batches),payload=item,taught_at=parse_time(item.get('taught_at')),finished_at=now() if done else None))
         counts['reused' if done else 'enqueued' if valid else 'needs_confirmation']+=1
     db.commit();return counts
 
-def browser(command,course,external_id=None):
+def browser(command,course,external_id=None,media_mode=None):
     from personal_os_api.config import get_settings
     from .connections import browser_env
     cfg=get_settings();env={**browser_env(),'KZKT_COURSE_NAME':course.name,'KZKT_PROCESS':'false','ACADEMIC_STORAGE_ROOT':cfg.academic_storage_root,'KZKT_BASE_URL':cfg.kzkt_base_url,'PERSONAL_OS_API_BASE_URL':f'http://{cfg.personal_os_host}:{cfg.personal_os_port}','PERSONAL_OS_TOOL_TOKEN':cfg.personal_os_tool_token}
-    env['KZKT_MEDIA_MODE']=cfg.values.get('course_modes',{}).get(str(course.id),cfg.values.get('replay_mode','text'))
+    env['KZKT_MEDIA_MODE']=media_mode or cfg.values.get('course_modes',{}).get(str(course.id),cfg.values.get('replay_mode','text'))
     env.pop('KZKT_RECORDING_ID',None)
     if external_id: env['KZKT_RECORDING_ID']=external_id
     done=subprocess.run([os.environ.get('SUFE_NODE','node'),str(ROOT/'integrations/kzkt-browser/cli.mjs'),command],cwd=ROOT,env=env,capture_output=True,text=True,encoding='utf-8',timeout=14400,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -113,17 +113,39 @@ def advance(db,job):
         job.result=add_manifest(db,job,browser('discover',course,job.external_id))
         if job.result.get('errors'): raise RuntimeError('；'.join(str(e.get('error','发现失败')).split('\n')[0] for e in job.result['errors']))
         job.status='success'
-    elif job.stage=='download':
+    elif job.stage in ('download', 'text'):
         record=db.get(CourseRecording,job.recording_id) if job.recording_id else None
-        if not record or not (record.metadata_ or {}).get('subtitle_text') or (get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))=='illustrated' and (not record.local_path or not Path(record.local_path).is_file())):
-            report=browser('sync',course,job.external_id)
-            if report.get('failed_count') or not report.get('recording_ids'): raise RuntimeError(json.dumps(report,ensure_ascii=False))
+        if not record or not (record.metadata_ or {}).get('subtitle_text'):
+            report=browser('sync',course,job.external_id,media_mode='text')
+            if report.get('failed_count') or not report.get('recording_ids'):
+                raise RuntimeError(json.dumps(report,ensure_ascii=False))
             job.recording_id=uuid.UUID(report['recording_ids'][0]);db.commit()
-        job.stage='review';job.status='queued'
-    elif job.stage=='review':
+            record=db.get(CourseRecording,job.recording_id)
+        if (record.metadata_ or {}).get('subtitle_text'):
+            job.result={**job.result,'text':process_recording(db,record,transcript_only=True)}
+        mode=get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))
+        job.stage='media' if mode=='illustrated' else 'transcribe';job.status='queued'
+    elif job.stage=='media':
         record=db.get(CourseRecording,job.recording_id)
-        if not (record.metadata_ or {}).get('subtitle_text') and not get_settings().values.get('whisper_enabled'): raise RuntimeError('尚无字幕，请启用本地转写并使用图文模式下载媒体')
-        job.result={**job.result,'review':process_recording(db,record)};job.stage='slides' if get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))=='illustrated' else 'complete';job.status='queued' if job.stage=='slides' else 'success'
+        mode=get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))
+        if mode=='illustrated' and (not record.local_path or not Path(record.local_path).is_file()):
+            report=browser('sync',course,job.external_id,media_mode='illustrated')
+            if report.get('failed_count') or not report.get('recording_ids'):
+                raise RuntimeError(json.dumps(report,ensure_ascii=False))
+            db.expire(record);db.refresh(record)
+            if not record.local_path or not Path(record.local_path).is_file():
+                raise RuntimeError('平台未提供可下载媒体；已获取的平台原文仍可阅读')
+        job.stage='transcribe';job.status='queued'
+    elif job.stage=='transcribe':
+        record=db.get(CourseRecording,job.recording_id)
+        job.result={**job.result,'transcript':process_recording(db,record,transcript_only=True)}
+        job.stage='summary';job.status='queued'
+    elif job.stage in ('review','summary'):
+        record=db.get(CourseRecording,job.recording_id)
+        job.result={**job.result,'review':process_recording(db,record)}
+        mode=get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))
+        job.stage='slides' if mode=='illustrated' else 'complete'
+        job.status='queued' if job.stage=='slides' else 'success'
     elif job.stage=='slides':
         from personal_os_api.lesson_knowledge import process_recording_slides
         job.result={**job.result,'slides':process_recording_slides(db,job.recording_id)};job.stage='complete';job.status='success'

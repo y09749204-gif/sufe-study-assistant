@@ -155,3 +155,33 @@ def test_health_does_not_contact_unconfigured_ai(isolated_settings):
     with patch('httpx.get') as get:
         runtime_health()
         get.assert_not_called()
+
+
+@pytest.mark.parametrize('mode',['text','illustrated'])
+def test_queue_commits_text_before_optional_media(isolated_settings,db,mode):
+    from personal_os_api.models import CourseProviderBinding,KzktQueueTask
+    from personal_os_api.kzkt_queue import advance
+    setup_term(isolated_settings,db);confirm(Timetable(rows=[sample()]),db)
+    course=db.scalar(select(AcademicCourse))
+    course_mode(course.id,CourseMode(mode=mode),db)
+    binding=CourseProviderBinding(course_id=course.id,provider='kzkt',external_id='queue-course');db.add(binding);db.flush()
+    record=CourseRecording(provider_binding_id=binding.id,course_id=course.id,provider='kzkt',external_id='queue-record',title='虚构课堂',content_hash='b'*64,metadata_={'subtitle_text':'已保存的平台原文'})
+    db.add(record);db.flush()
+    job=KzktQueueTask(dedupe_key='queue-test',course_id=course.id,recording_id=record.id,external_id=record.external_id,title=record.title,stage='text')
+    db.add(job);db.flush()
+    with patch('personal_os_api.kzkt_queue.eligible_courses',return_value=[course]),patch('personal_os_api.kzkt_queue.browser',side_effect=RuntimeError('download failed')) as browser:
+        advance(db,job)
+        assert db.scalar(select(RecordingTranscript.text))=='已保存的平台原文'
+        if mode=='text':
+            assert job.stage=='transcribe'
+            advance(db,job);assert job.stage=='summary'
+            advance(db,job);assert job.status=='success'
+            browser.assert_not_called()
+        else:
+            assert job.stage=='media'
+            with pytest.raises(RuntimeError,match='download failed'):advance(db,job)
+            assert db.scalar(select(RecordingTranscript.text))=='已保存的平台原文'
+            course_mode(course.id,CourseMode(mode='text'),db)
+            browser.reset_mock()
+            advance(db,job);assert job.stage=='transcribe'
+            browser.assert_not_called()
