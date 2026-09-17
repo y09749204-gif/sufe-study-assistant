@@ -115,7 +115,9 @@ async function identity(page) {
   if (loginDestination(page.url())) throw canvasFailure("authentication_required", "Canvas 会话未登录或已失效");
   const profile = await canvasJson(page, "/api/v1/users/self/profile");
   const userId = String(profile.id || "");
-  if (!["identify","login"].includes(command) && userId !== expectedUserId) throw new Error(`Canvas account mismatch: expected ${expectedUserId}`);
+  if (!["identify","login"].includes(command) && userId !== expectedUserId) {
+    throw canvasFailure("account_mismatch", `Canvas 登录的账号与已绑定账号不一致（期望 ${expectedUserId}，实际 ${userId}）`);
+  }
   const identity = { user_id: userId, name: profile.name || null };
   if (["identify","login"].includes(command)) writeFileSync(join(runtimeRoot,"identity.json"), JSON.stringify(identity));
   return identity;

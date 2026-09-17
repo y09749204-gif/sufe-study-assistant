@@ -808,6 +808,7 @@ export default function Onboarding({
                   : "尚未绑定账号"}{" "}
                 · {statusText(platform.canvas)}
               </p>
+              {platform.canvas?.message && <p className="notice">{platform.canvas.message}</p>}
             </section>
             <section>
               <h2>空中课堂 · 可以稍后连接</h2>

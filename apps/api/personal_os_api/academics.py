@@ -744,6 +744,9 @@ def canvas_status() -> dict:
             elif reason == "rate_limited":
                 result["status"] = "check_failed"
                 result["message"] = "Canvas 暂时限制了检查请求，请稍后再试。"
+            elif reason == "account_mismatch":
+                result["status"] = "check_failed"
+                result["message"] = "当前 Canvas 登录的是另一个账号；请重新登录并核对识别出的身份。"
             elif reason in {"service_unavailable", "request_failed", "unknown"}:
                 result["status"] = "check_failed"
                 result["message"] = "Canvas 账号检查失败，未能判断登录是否过期。请刷新检查。"
