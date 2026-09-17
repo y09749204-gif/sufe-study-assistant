@@ -23,7 +23,32 @@ if (!existsSync(chromePath)) throw new Error("Google Chrome executable was not f
 mkdirSync(downloadRoot, { recursive: true });
 
 function recordStatus(status, details = {}) {
-  writeFileSync(statusPath, JSON.stringify({ status, checked_at: new Date().toISOString(), ...details }, null, 2));
+  let previous = {};
+  try { previous = JSON.parse(readFileSync(statusPath, "utf8")); } catch {}
+  const now = new Date().toISOString();
+  const verified = ["authenticated", "success"].includes(status)
+    ? { user_id: details.user_id || null, name: details.name || null, checked_at: now }
+    : previous.last_verified || null;
+  writeFileSync(statusPath, JSON.stringify({ status, checked_at: now, last_verified: verified, ...details }, null, 2));
+}
+
+function canvasFailure(reason, message) {
+  const error = new Error(message);
+  error.canvas_reason = reason;
+  return error;
+}
+
+function loginDestination(value) {
+  try {
+    const url = new URL(value);
+    return /\/(?:login|logout|sessions|users\/sign_in)\b/i.test(url.pathname) || /(?:cas|sso|oauth|auth)\b/i.test(url.hostname + url.pathname);
+  } catch { return false; }
+}
+
+function failureDetails(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const reason = error?.canvas_reason || "unknown";
+  return { reason, error: message };
 }
 
 function safeName(value) {
@@ -52,11 +77,20 @@ async function launch(headless) {
 }
 
 async function canvasJson(page, path) {
-  return page.evaluate(async ({ path }) => {
+  const result = await page.evaluate(async ({ path }) => {
     const response = await fetch(path, { credentials: "same-origin", headers: { accept: "application/json" } });
-    if (!response.ok) throw new Error(`Canvas ${response.status} for ${path}`);
-    return response.json();
+    const finalUrl = response.url;
+    if (!response.ok) return { ok: false, status: response.status, finalUrl, redirected: response.redirected };
+    return { ok: true, value: await response.json() };
   }, { path });
+  if (result.ok) return result.value;
+  if (loginDestination(result.finalUrl) || result.status === 401 || result.status === 403) {
+    throw canvasFailure("authentication_required", "Canvas 会话未登录或已失效");
+  }
+  if (result.status === 404) throw canvasFailure("api_not_found", `Canvas 接口不可用（404）：${path}`);
+  if (result.status === 429) throw canvasFailure("rate_limited", "Canvas 暂时限制了请求，请稍后重试");
+  if (result.status >= 500) throw canvasFailure("service_unavailable", `Canvas 服务暂时不可用（${result.status}）`);
+  throw canvasFailure("request_failed", `Canvas 接口请求失败（${result.status}）：${path}`);
 }
 
 async function canvasAll(page, path) {
@@ -78,6 +112,7 @@ async function canvasAllSafe(page, path, label) {
 
 async function identity(page) {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+  if (loginDestination(page.url())) throw canvasFailure("authentication_required", "Canvas 会话未登录或已失效");
   const profile = await canvasJson(page, "/api/v1/users/self/profile");
   const userId = String(profile.id || "");
   if (!["identify","login"].includes(command) && userId !== expectedUserId) throw new Error(`Canvas account mismatch: expected ${expectedUserId}`);
@@ -218,7 +253,7 @@ async function main() {
     recordStatus("success", { ...who, result });
     console.log(JSON.stringify(result));
   } catch (error) {
-    recordStatus("failed", { error: error instanceof Error ? error.message : String(error) });
+    recordStatus("failed", failureDetails(error));
     throw error;
   } finally {
     if (context) await context.close();

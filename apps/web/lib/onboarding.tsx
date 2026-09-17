@@ -64,6 +64,7 @@ const statusText = (s: any) =>
     never_run: "尚未连接",
     authenticated: "登录检查通过",
     login_required: "登录已过期，请重新登录",
+    check_failed: "账号检查失败（未判断为登录过期）",
     login_window_closed: "请检查登录状态",
     syncing: "正在处理",
     success: "已完成",

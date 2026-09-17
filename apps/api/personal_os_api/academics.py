@@ -730,10 +730,23 @@ def canvas_status() -> dict:
     if not path.is_file(): return {"status": "never_run"}
     try:
         result = json.loads(path.read_text(encoding="utf-8"))
+        reason = str(result.get("reason") or "")
         error = str(result.get("error") or "")
-        if result.get("status") == "failed" and ("login timed out" in error.lower() or "Canvas 404" in error):
-            result["status"] = "login_required"
-            result["message"] = "请登录独立 Canvas Chrome，进入 Canvas 首页后关闭窗口，再开始同步"
+        # Older browser scripts only wrote text. A timeout is evidence of a login flow
+        # not completing; a 404 is never enough evidence to declare a session expired.
+        if result.get("status") == "failed":
+            if reason == "authentication_required" or (not reason and "login timed out" in error.lower()):
+                result["status"] = "login_required"
+                result["message"] = "Canvas 要求重新登录。请在独立浏览器窗口完成登录后，再刷新账号检查。"
+            elif reason == "api_not_found" or "canvas 404" in error.lower():
+                result["status"] = "check_failed"
+                result["message"] = "账号检查接口返回 404，未能判断登录是否过期；请刷新检查或查看 Canvas 服务状态。"
+            elif reason == "rate_limited":
+                result["status"] = "check_failed"
+                result["message"] = "Canvas 暂时限制了检查请求，请稍后再试。"
+            elif reason in {"service_unavailable", "request_failed", "unknown"}:
+                result["status"] = "check_failed"
+                result["message"] = "Canvas 账号检查失败，未能判断登录是否过期。请刷新检查。"
         return result
     except (OSError, json.JSONDecodeError): return {"status": "invalid_status"}
 

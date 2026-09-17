@@ -1,4 +1,5 @@
 from datetime import date
+import json
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -87,6 +88,32 @@ def test_account_rebind_rejected(isolated_settings):
     save_settings({'storage_root':str(root),'canvas_user_id':'101'})
     with pytest.raises(HTTPException) as e:bind_canvas(CanvasIdentity(user_id='202'))
     assert e.value.status_code==409
+
+
+def test_canvas_404_is_a_check_failure_not_an_expired_login(isolated_settings):
+    from personal_os_api.academics import canvas_status
+    root=isolated_settings/'courses'/'.runtime/canvas';root.mkdir(parents=True)
+    (root/'status.json').write_text(json.dumps({'status':'failed','reason':'api_not_found','error':'Canvas 接口不可用（404）'}),'utf-8')
+    save_settings({'storage_root':str(isolated_settings/'courses'),'canvas_user_id':'101'})
+    result=canvas_status()
+    assert result['status']=='check_failed'
+    assert '未能判断登录是否过期' in result['message']
+
+
+def test_canvas_authentication_evidence_marks_login_required(isolated_settings):
+    from personal_os_api.academics import canvas_status
+    root=isolated_settings/'courses'/'.runtime/canvas';root.mkdir(parents=True)
+    (root/'status.json').write_text(json.dumps({'status':'failed','reason':'authentication_required','error':'Canvas 会话未登录或已失效'}),'utf-8')
+    save_settings({'storage_root':str(isolated_settings/'courses')})
+    assert canvas_status()['status']=='login_required'
+
+
+def test_legacy_canvas_404_is_not_misclassified_as_login_expiry(isolated_settings):
+    from personal_os_api.academics import canvas_status
+    root=isolated_settings/'courses'/'.runtime/canvas';root.mkdir(parents=True)
+    (root/'status.json').write_text(json.dumps({'status':'failed','error':'page.evaluate: Error: Canvas 404 for /api/v1/users/self/profile'}),'utf-8')
+    save_settings({'storage_root':str(isolated_settings/'courses')})
+    assert canvas_status()['status']=='check_failed'
 
 
 def test_course_mode_override(isolated_settings,db):
