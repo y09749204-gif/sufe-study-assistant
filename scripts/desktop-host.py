@@ -29,6 +29,7 @@ def main():
         try:run([pg/'initdb.exe','-D',dbdir,'-U','sufe','--pwfile',pw,'--auth=scram-sha-256','--encoding=UTF8','--locale=C','--no-locale'])
         finally:pw.unlink(missing_ok=True)
     dbport=port();apiport=port();token=secrets.token_urlsafe(32)
+    os.environ['SUFE_RUN_ID']=secrets.token_hex(16)
     env={**os.environ,'SUFE_DATA_DIR':str(DATA),'PYTHONPATH':str(ROOT/'apps/api'),'SUFE_API_PORT':str(apiport),'SUFE_API_TOKEN':token,'SUFE_NODE':str(RUNTIME/'node/node.exe'),'PGPASSWORD':cred['password'],'DATABASE_URL':f"postgresql+psycopg://sufe:{cred['password']}@127.0.0.1:{dbport}/sufe_study",'SUFE_WEB_DIR':str(ROOT/'apps/web/out')}
     children=[];started=False
     try:
@@ -51,9 +52,15 @@ def main():
                     if response.status==200:break
             except Exception:time.sleep(.5)
         else:raise RuntimeError('API startup timeout')
+        import win32crypt
+        (DATA/'connection.dpapi').write_bytes(win32crypt.CryptProtectData(token.encode(),'Sufe CLI',None,None,None,0))
+        descriptor={'app':'sufe-study-assistant','protocol':1,'url':f'http://127.0.0.1:{apiport}','pid':os.getpid()}
+        (DATA/'connection.tmp').write_text(json.dumps(descriptor),'utf-8');(DATA/'connection.tmp').replace(DATA/'connection.json')
         print(json.dumps({'url':f'http://127.0.0.1:{apiport}/#token={token}'}),flush=True)
         sys.stdin.readline()
     finally:
+        (DATA/'connection.json').unlink(missing_ok=True)
+        (DATA/'connection.dpapi').unlink(missing_ok=True)
         for child in children:
             child.terminate()
             try:child.wait(timeout=10)

@@ -4,6 +4,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import uuid
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -37,8 +39,18 @@ def start_browser(provider,command):
     if not node:raise RuntimeError('Node runtime not found')
     logs=data_root()/'logs';logs.mkdir(parents=True,exist_ok=True)
     with (logs/f'{provider}.log').open('ab') as output:
-        subprocess.Popen([node,str(script),command],cwd=ROOT,env=env,stdout=output,stderr=output,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    return {'status':'started'}
+        process = subprocess.Popen([node,str(script),command],cwd=ROOT,env=env,stdout=output,stderr=output,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    job_id = str(uuid.uuid4())
+    jobs = data_root()/'jobs'; jobs.mkdir(exist_ok=True)
+    state = {'id':job_id,'provider':provider,'command':command,'status':'running','run_id':os.environ.get('SUFE_RUN_ID')}
+    path = jobs/f'{job_id}.json'
+    def persist():
+        pending = path.with_suffix('.tmp'); pending.write_text(json.dumps(state),encoding='utf-8'); pending.replace(path)
+    persist()
+    def wait():
+        code = process.wait(); state.update(status='success' if code==0 else 'failed',exit_code=code); persist()
+    threading.Thread(target=wait,daemon=True).start()
+    return {'status':'started','job_id':job_id}
 
 
 @router.post('/{provider}/login')

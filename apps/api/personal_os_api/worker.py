@@ -19,7 +19,7 @@ def main():
     last_canvas=last_wecom=last_discovery=0
     while True:
         cfg=get_settings();now=time.monotonic();state={}
-        if cfg.values.get('term_id'):
+        if cfg.values.get('term_id') and cfg.values.get('background_sync', True):
             if cfg.canvas_expected_user_id and now-last_canvas>6*3600:
                 try:
                     from .connections import start_browser
