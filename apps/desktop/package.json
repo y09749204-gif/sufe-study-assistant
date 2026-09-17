@@ -32,7 +32,13 @@
           "**/*",
           "!**/__pycache__/**",
           "!**/*.pyc",
-          "!**/Scripts/**"
+          "!**/Scripts/**",
+          "!**/~*/**",
+          "!node/node_modules/**",
+          "!node/*.cmd",
+          "!node/npm",
+          "!node/npx",
+          "!node/corepack"
         ]
       },
       {
@@ -81,7 +87,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "runAfterFinish": false
     }
   }
 }

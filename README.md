@@ -42,6 +42,8 @@ python scripts/prepare-runtime.py
 
 AI API 地址填写服务商的兼容入口，例如以 `/v1` 结尾的地址。云端模式须明确启用，API Key 由 Windows DPAPI 保存。Ollama 模式只允许本机服务。
 
+详细的已验证范围与待完成项见 [验证记录](docs/VERIFICATION.md) 和 [变更记录](CHANGELOG.md)。
+
 ## 参与贡献
 
 欢迎贡献课程平台适配、安装兼容性、测试、文档和问题反馈。请先阅读 [贡献指南](CONTRIBUTING.md)、[开发说明](docs/DEVELOPMENT.md)、[隐私说明](docs/PRIVACY.md)。Issue 中请勿上传 Cookie、密钥、学校账号、完整聊天或课程回放。

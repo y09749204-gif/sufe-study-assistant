@@ -9,7 +9,7 @@ app.whenReady().then(()=>{
  const runtimes=app.isPackaged?path.join(process.resourcesPath,'runtime'):path.join(root,'runtime');
  const python=path.join(runtimes,'python','python.exe');
  const data=path.join(app.getPath('appData'),'SufeStudyAssistant');
- host=spawn(python,[path.join(root,'scripts','desktop-host.py')],{cwd:root,windowsHide:true,env:{...process.env,SUFE_DATA_DIR:data,SUFE_RUNTIME_DIR:runtimes,PYTHONPATH:path.join(root,'apps/api')},stdio:['pipe','pipe','pipe']});
+ host=spawn(python,['-B',path.join(root,'scripts','desktop-host.py')],{cwd:root,windowsHide:true,env:{...process.env,SUFE_DATA_DIR:data,SUFE_RUNTIME_DIR:runtimes,PYTHONPATH:path.join(root,'apps/api')},stdio:['pipe','pipe','pipe']});
  window=new BrowserWindow({width:1280,height:860,minWidth:580,minHeight:600,title:'上财学业助手',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  window.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<meta charset="utf-8"><body style="font:16px system-ui;padding:50px;background:#f5f6f2"><h1>上财学业助手</h1><p>正在启动独立数据库和本机服务，首次启动需要片刻…</p></body>'));
  let buffer='',origin='';

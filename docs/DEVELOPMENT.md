@@ -14,7 +14,9 @@ python -m venv .venv
 # 准备独立 PostgreSQL 数据库 sufe_test，绝不能使用个人数据库。
 $env:DATABASE_URL='postgresql+psycopg://sufe:YOUR_TEST_PASSWORD@127.0.0.1:55439/sufe_test'
 ./.venv/Scripts/python.exe -m pytest -q
-node --test integrations/kzkt-browser/parsers.test.mjs
+npm.cmd ci --prefix integrations/kzkt-browser
+npx.cmd --prefix integrations/kzkt-browser playwright-core install chromium
+node --test integrations/kzkt-browser/*.test.mjs
 npm.cmd run typecheck --prefix apps/web
 npm.cmd run build --prefix apps/web
 python scripts/check-publication.py
@@ -43,3 +45,12 @@ npm.cmd run pack --prefix apps/desktop
 ```
 
 首次运行 `prepare-runtime.py` 需要网络。固定下载源与构建校验值写入运行时 manifest。安装包不能包含测试数据、开发机设置、学校登录态或个人模型缓存。签名证书不是开发版前置条件；未签名必须注明，不能引导关闭系统保护。
+
+打包后的冒烟测试与产物检查：
+
+```powershell
+python scripts/smoke-desktop.py dist/win-unpacked/resources
+python scripts/check-artifact.py dist/win-unpacked
+```
+
+冒烟测试使用新建的临时用户目录；它验证运行时与 API，不替代全新 Windows 的安装、卸载及真实账号验收。

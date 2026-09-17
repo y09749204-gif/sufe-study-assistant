@@ -41,8 +41,8 @@ def main():
             if not db.execute("SELECT 1 FROM pg_database WHERE datname='sufe_study'").fetchone():db.execute('CREATE DATABASE sufe_study')
         backups=DATA/'backups';backups.mkdir(exist_ok=True)
         if (DATA/'schema-version').exists():run([pg/'pg_dump.exe','-h','127.0.0.1','-p',str(dbport),'-U','sufe','-Fc','-f',backups/f'before-start-{int(time.time())}.dump','sufe_study'],env)
-        run([sys.executable,ROOT/'scripts/migrate.py'],env)
-        for args in ([sys.executable,'-m','uvicorn','personal_os_api.main:app','--host','127.0.0.1','--port',str(apiport),'--no-access-log'],[sys.executable,'-m','personal_os_api.worker']):
+        run([sys.executable,'-B',ROOT/'scripts/migrate.py'],env)
+        for args in ([sys.executable,'-B','-m','uvicorn','personal_os_api.main:app','--host','127.0.0.1','--port',str(apiport),'--no-access-log'],[sys.executable,'-B','-m','personal_os_api.worker']):
             children.append(subprocess.Popen(args,cwd=ROOT,env=env,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)))
         for _ in range(120):
             if children[0].poll() is not None:raise RuntimeError('API exited')
