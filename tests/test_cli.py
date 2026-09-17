@@ -33,3 +33,11 @@ def test_wrong_app_never_written(capsys):
 
 def test_no_redirects():
     assert cli.NoRedirect().redirect_request(None,None,None,None,None,None) is None
+
+
+def test_classroom_cli_sync_uses_mode_aware_queue():
+    from personal_os_api.integration import sync
+    with patch('personal_os_api.kzkt_queue.enqueue',return_value={'batch_id':'test-batch','courses':1,'status':'queued'}),patch('personal_os_api.kzkt_queue.queue_state',return_value={'paused':True}),patch('personal_os_api.integration.start_browser') as browser:
+        result=sync('kzkt',db=object())
+        assert result['job_id']=='test-batch' and result['paused']
+        browser.assert_not_called()

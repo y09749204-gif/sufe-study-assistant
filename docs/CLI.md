@@ -30,6 +30,8 @@ stdout 始终输出 UTF-8 JSON。成功为 `{"ok":true,"protocol":1,"data":...}`
 
 同步返回 `started` 和 `job_id` 仅表示已启动，必须查询任务，`success` 才表示同步进程成功退出；重启前未完成的任务标记 `interrupted`。该成功不代表后续所有回放总结已经处理完成。网络中断后写入结果可能不确定，先查询状态，勿盲目重试同步。
 
+空中课堂同步进入既有处理队列，遵守全局／课程的文本或图文模式，文本模式不下载视频；返回 `queued` 和 `job_id`（批次编号）。查询会返回整批处理状态，包括 `paused`、`needs_confirmation`。迁移后队列默认暂停，请先在助手中核对账号和处理模式，再恢复队列。
+
 ## 集成方式
 
 用进程参数数组调用随包 Python 和 `scripts/sufe.py`（不经 shell），解析 JSON 与退出码。公共入口底层调用本机 HTTP API；`/api/integration/v1/status` 返回协议和能力。访问凭据仅限同一 Windows 用户，服务只监听 loopback，CLI 拒绝重定向和代理。
