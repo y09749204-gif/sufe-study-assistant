@@ -92,6 +92,25 @@ def wecom_accounts():
     return [{'account_id':p.name,'data_dir':str(p/'Data')} for p in root.glob('*') if p.name.isdigit() and (p/'Data/message.db').is_file()]
 
 
+@router.get('/wecom/status')
+def wecom_status():
+    """Report only setup state; the protected key and message data never leave disk."""
+    cfg = get_settings().values.get('wecom')
+    private = data_root() / 'wecom'
+    status_path = private / 'status.json'
+    identity = None
+    if status_path.is_file():
+        try:
+            identity = json.loads(status_path.read_text(encoding='utf-8')).get('identity')
+        except (OSError, json.JSONDecodeError):
+            identity = None
+    return {
+        'status': 'ready' if identity else ('key_saved' if (private / 'key.dpapi').is_file() else ('configured' if cfg else 'not_configured')),
+        'account_id': cfg.get('account_id') if cfg else None,
+        'identity_verified': bool(identity),
+    }
+
+
 class WecomConfig(BaseModel):
     account_id:str=Field(pattern=r'^\d+$')
     organization_id:str=Field(pattern=r'^\d+$')

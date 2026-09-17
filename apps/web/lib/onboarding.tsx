@@ -118,6 +118,14 @@ export default function Onboarding({
   });
   const [syncBatches, setSyncBatches] = useState<Record<string, string>>({});
   const [queueTasks, setQueueTasks] = useState<any[]>([]);
+  const [wecom, setWecom] = useState<any>({
+    account_id: "",
+    organization_id: "",
+    expected_name: "",
+    expected_organization: "上海财经大学",
+  });
+  const [wecomAccounts, setWecomAccounts] = useState<any[]>([]);
+  const [wecomStatus, setWecomStatus] = useState<any>({ status: "not_configured" });
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const title = useRef<HTMLHeadingElement>(null);
   const latest = useRef({ draft, step });
@@ -200,6 +208,7 @@ export default function Onboarding({
       });
       setStep(state.step);
       setAi(clearAISecrets({ ...ai, ...s.settings.ai }));
+      setWecom((current: any) => ({ ...current, ...(s.settings.wecom || {}) }));
       setLoaded(true);
     });
   }, []);
@@ -311,6 +320,8 @@ export default function Onboarding({
       "/api/academics/canvas/status",
       "/api/academics/kzkt/status",
       "/api/academics/kzkt/queue",
+      "/api/connections/wecom/accounts",
+      "/api/connections/wecom/status",
     ];
     const result = await Promise.allSettled(
       endpoints.map((p) => fetchJson<any>(p)),
@@ -328,6 +339,8 @@ export default function Onboarding({
     });
     if (result[3].status === "fulfilled")
       setQueueTasks(result[3].value.tasks || []);
+    if (result[4].status === "fulfilled") setWecomAccounts(result[4].value);
+    if (result[5].status === "fulfilled") setWecomStatus(result[5].value);
     await refresh();
   }
   async function sync() {
@@ -840,10 +853,40 @@ export default function Onboarding({
               <p>{statusText(platform.kzkt)}</p>
             </section>
             <section>
-              <h2>企微属于可选连接</h2>
+              <h2>企微 · 本机只读采集（可稍后连接）</h2>
               <p>
-                进入工作台后，在“连接”中选择本机账号、核验本人姓名与组织，再绑定课程群。已缓存附件可归档；未缓存附件需要先在企微手动下载。
+                只读取你已登录的 Windows 企微客户端数据库副本。确认课程群后才导入课程消息；已缓存附件可归档，未缓存附件需要你先在企微中手动下载。
               </p>
+              <div className="form-grid">
+                <label>
+                  本机企微账号
+                  <select value={wecom.account_id} onChange={(e) => setWecom({ ...wecom, account_id: e.target.value })}>
+                    <option value="">请选择已登录账号</option>
+                    {wecomAccounts.map((account) => <option key={account.account_id} value={account.account_id}>{account.account_id}</option>)}
+                  </select>
+                </label>
+                <label>组织 ID<input value={wecom.organization_id} onChange={(e) => setWecom({ ...wecom, organization_id: e.target.value })} /></label>
+                <label>本人姓名<input value={wecom.expected_name} onChange={(e) => setWecom({ ...wecom, expected_name: e.target.value })} /></label>
+                <label>组织名称<input value={wecom.expected_organization} onChange={(e) => setWecom({ ...wecom, expected_organization: e.target.value })} /></label>
+              </div>
+              <div className="toolbar">
+                <button disabled={busy || !wecom.account_id || !wecom.organization_id || !wecom.expected_name} onClick={() => void action(async () => {
+                  await request("/api/connections/wecom", wecom, "PUT");
+                  await connections();
+                  setNotice("企微身份配置已保存；下一步读取本机密钥并同步核验。");
+                })}>保存企微身份配置</button>
+                <button disabled={busy || wecomStatus.status === "not_configured"} onClick={() => void action(async () => {
+                  await request("/api/connections/wecom/discover-key");
+                  await connections();
+                  setNotice("密钥已受 Windows 用户级加密保护，可开始只读同步。");
+                })}>读取并保护本机密钥</button>
+                <button disabled={busy || !["key_saved", "ready"].includes(wecomStatus.status)} onClick={() => void action(async () => {
+                  await request("/api/academics/wecom/sync");
+                  await connections();
+                  setNotice("企微已完成只读同步；请在工作台“待确认”中绑定课程群。");
+                })}>开始只读同步</button>
+              </div>
+              <p>状态：{wecomStatus.status === "ready" ? "身份已核验，可同步课程群" : wecomStatus.status === "key_saved" ? "密钥已保护，等待只读同步核验" : wecomStatus.status === "configured" ? "身份配置已保存，等待读取密钥" : "尚未配置"}</p>
             </section>
           </>
         )}
