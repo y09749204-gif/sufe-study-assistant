@@ -53,9 +53,26 @@ try{
  await button('保存学期并继续').click();
  await button('继续（连接可跳过）').click();
  assert.equal(await page.getByLabel('AI 提供方',{exact:true}).inputValue(),'none');
+ await page.getByLabel('AI 提供方',{exact:true}).selectOption('deepseek');
+ assert.equal(await page.getByLabel('API 服务地址',{exact:true}).inputValue(),'https://api.deepseek.com');
+ await page.getByLabel('看图服务来源',{exact:true}).selectOption('separate');
+ await page.getByLabel('看图服务提供方',{exact:true}).selectOption('custom');
+ assert.equal(await page.getByLabel('API Key',{exact:true}).count(),2);
+ await page.getByLabel('API Key',{exact:true}).first().fill('fictional-secret');
+ await page.getByLabel('API 服务地址',{exact:true}).first().fill('https://different.example/v1');
+ assert.equal(await page.getByLabel('API Key',{exact:true}).first().inputValue(),'');
+ await page.getByLabel('看图服务来源',{exact:true}).selectOption('reuse');
+ await page.getByLabel('AI 提供方',{exact:true}).selectOption('none');
+ await page.getByRole('radio',{name:/图文模式/}).check();
+ assert.equal(await page.getByRole('radio',{name:/文本模式/}).isChecked(),false);
+ if(process.env.SUFE_TEST_SCREENSHOTS){mkdirSync(process.env.SUFE_TEST_SCREENSHOTS,{recursive:true});await page.screenshot({path:join(process.env.SUFE_TEST_SCREENSHOTS,'learning-options.png'),fullPage:true});}
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.setViewportSize({width:1280,height:960});
  await button('保存学习设置并继续').click();
  await page.getByRole('heading',{name:'你的工作台已准备好',exact:true}).waitFor();
  assert.equal(await button('启动 Canvas 同步').isDisabled(),true);
+ assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/setup');return(await r.json()).settings.replay_mode}),'illustrated');
  const output=process.env.SUFE_TEST_SCREENSHOTS;
  if(output){mkdirSync(output,{recursive:true});await page.screenshot({path:join(output,'onboarding-summary.png'),fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(output,'onboarding-mobile.png'),fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.setViewportSize({width:1280,height:960})}
  await button('进入工作台').click();

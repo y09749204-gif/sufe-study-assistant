@@ -16,7 +16,7 @@ from .config import get_settings, save_settings, data_root
 from .db import get_db
 from .sufe_timetable import sufe_periods
 from .models import AcademicTerm, AcademicCourse, Project, ProjectStatus, AutomationProfile, CalendarItem, CalendarItemType, ClassSession, DeliveryMode, CourseMeetingRule
-from .ai_provider import store_key, chat_json, validate_config
+from .ai_provider import store_key, chat_json, validate_config, key_path, normalized_url, list_models
 
 router = APIRouter(prefix='/api/setup', tags=['setup'])
 
@@ -39,6 +39,15 @@ class Setup(BaseModel):
 def status():
     cfg = dict(get_settings().values)
     cfg["periods"] = sufe_periods()
+    ai = dict(cfg.get('ai', {'provider': 'none'}))
+    ai['api_key_set'] = key_path(ai.get('key_ref')).exists()
+    ai.pop('key_ref', None)
+    if ai.get('vision_service'):
+        vision = dict(ai['vision_service'])
+        vision['api_key_set'] = key_path(vision.get('key_ref')).exists()
+        vision.pop('key_ref', None)
+        ai['vision_service'] = vision
+    cfg['ai'] = ai
     return {'configured': bool(cfg.get('term_id')), 'settings': cfg, 'api_key_set': (data_root() / 'api-key.dpapi').exists(), 'default_storage_root': get_settings().academic_storage_root}
 
 
@@ -64,32 +73,72 @@ def configure(body: Setup, db=Depends(get_db)):
     return status()
 
 
-class AIConfig(BaseModel):
+class AIService(BaseModel):
     provider: Literal['none','ollama','openai']
     base_url: str = 'http://127.0.0.1:11434'
     text_model: str = ''
     vision_model: str = ''
     cloud_consent: bool = False
     api_key: str | None = None
+    vendor: str = 'custom'
+
+
+class AIConfig(AIService):
+    vision_reuse: bool = True
+    vision_service: AIService | None = None
 
 
 @router.put('/ai')
 def configure_ai(body: AIConfig):
-    cfg = body.model_dump(exclude={'api_key'})
-    try:
+    settings = get_settings().values
+    old = settings.get('ai', {})
+    pending = []
+    def prepare(service, previous):
+        cfg = service.model_dump(exclude={'api_key', 'vision_service', 'vision_reuse'})
+        cfg['base_url'] = normalized_url(cfg['base_url'])
         validate_config(cfg)
-        if body.api_key: store_key(body.api_key)
+        if cfg['provider'] == 'openai':
+            same = previous.get('provider') == cfg['provider'] and normalized_url(previous.get('base_url', '')) == cfg['base_url']
+            if service.api_key:
+                cfg['key_ref'] = uuid.uuid4().hex
+                pending.append((service.api_key, cfg['key_ref']))
+            elif same and key_path(previous.get('key_ref')).exists():
+                if previous.get('key_ref'): cfg['key_ref'] = previous['key_ref']
+            else: raise ValueError('请为该服务填写 API Key；更换地址不能沿用旧密钥')
+        return cfg
+    try:
+        cfg = prepare(body, old)
+        cfg['vision_reuse'] = body.vision_reuse
+        if not body.vision_reuse:
+            cfg['vision_service'] = prepare(body.vision_service or AIService(provider='none'), old.get('vision_service') or {})
+        for value, ref in pending: store_key(value, ref)
     except ValueError as e: raise HTTPException(422, str(e))
-    settings = get_settings().values; settings['ai']=cfg; save_settings(settings)
+    settings['ai']=cfg; save_settings(settings)
     return {'provider': body.provider, 'saved': True}
 
 
 @router.post('/ai/test')
-def test_ai():
+def test_ai(purpose: Literal['text', 'vision'] = 'text'):
     try:
-        result=chat_json('Return exactly this JSON object: {"ok":true}')
-        if result.get('ok') is not True: raise RuntimeError('模型返回不符合要求')
+        if purpose == 'vision':
+            import secrets
+            from PIL import Image, ImageDraw
+            code = ''.join(secrets.choice('23456789') for _ in range(5))
+            image = Image.new('RGB', (240, 80), 'white')
+            ImageDraw.Draw(image).text((20, 15), code, fill='black', font_size=40)
+            output = io.BytesIO(); image.save(output, format='PNG')
+            result = chat_json('Read the digits in this image. Return JSON only: {"digits":"the digits you see"}', image='data:image/png;base64,' + base64.b64encode(output.getvalue()).decode())
+            if result.get('digits') != code: raise RuntimeError('看图测试未通过，请选择支持图片输入的模型')
+        else:
+            result=chat_json('Return exactly this JSON object: {"ok":true}')
+            if result.get('ok') is not True: raise RuntimeError('模型返回不符合要求')
         return {'ok': True}
+    except RuntimeError as e: raise HTTPException(409, str(e))
+
+
+@router.get('/ai/models')
+def ai_models(purpose: Literal['text', 'vision'] = 'text'):
+    try: return {'models': list_models(purpose)}
     except RuntimeError as e: raise HTTPException(409, str(e))
 
 

@@ -44,7 +44,7 @@ python scripts/prepare-runtime.py
 
 桌面程序使用独立用户目录 `AppData/Roaming/SufeStudyAssistant`，首次创建空数据库。不会导入作者课表、聊天、登录态或其他 Personal OS 数据。开发测试可以通过 `SUFE_DATA_DIR` 指定单独目录；不要指向其他项目的数据。
 
-AI API 地址填写服务商的兼容入口，例如以 `/v1` 结尾的地址。云端模式须明确启用，API Key 由 Windows DPAPI 保存。Ollama 模式只允许本机服务。
+AI 支持本机 Ollama、OpenAI、DeepSeek 和自定义 OpenAI 兼容 Chat Completions 接口。文字与看图默认共用服务和 Key，也可分别配置（包括本地文字＋云端看图）。模型可获取列表后选择或手动填写准确 ID；列表不保证看图能力，需单独测试。云端模式须明确启用，每个服务的 API Key 由 Windows DPAPI 加密保存，更换地址须重新填写。Ollama 只允许本机服务。暂不支持 Anthropic／Gemini 原生协议，第三方服务需自行测试验证。
 
 详细的已验证范围与待完成项见 [验证记录](docs/VERIFICATION.md) 和 [变更记录](CHANGELOG.md)。
 

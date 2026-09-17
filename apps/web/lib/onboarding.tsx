@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { fetchJson } from "./api";
+import AISettings, {clearAISecrets} from "./ai-settings";
+import ReplayMode from "./replay-mode";
 
 type Row = {
   course_code: string;
@@ -196,7 +198,7 @@ export default function Onboarding({
         rows: rowDraft(savedDraft.rows || []),
       });
       setStep(state.step);
-      setAi({ ...ai, ...s.settings.ai, api_key: "" });
+      setAi(clearAISecrets({ ...ai, ...s.settings.ai }));
       setLoaded(true);
     });
   }, []);
@@ -251,7 +253,7 @@ export default function Onboarding({
     if (step === 2) await saveTerm();
     if (step === 4) {
       await request("/api/setup/ai", ai, "PUT");
-      setAi({ ...ai, api_key: "" });
+      setAi(clearAISecrets(ai));
       await saveTerm();
     }
     await go(step + 1);
@@ -275,7 +277,7 @@ export default function Onboarding({
   }
   async function importFile(file: File, image = false) {
     if (image) {
-      if (!settings.settings?.ai?.vision_model)
+      if (!(settings.settings?.ai?.vision_reuse === false ? settings.settings?.ai?.vision_service?.vision_model : settings.settings?.ai?.vision_model))
         throw Error(
           "截图识别需要看图模型。请先前往第 5 步配置并保存 AI，再返回这里。",
         );
@@ -584,7 +586,7 @@ export default function Onboarding({
                   />
                 </label>
               </div>
-              {!settings.settings?.ai?.vision_model && (
+              {!(settings.settings?.ai?.vision_reuse === false ? settings.settings?.ai?.vision_service?.vision_model : settings.settings?.ai?.vision_model) && (
                 <p>
                   截图识别需要看图模型。
                   <button onClick={() => void action(() => go(4))}>
@@ -851,159 +853,12 @@ export default function Onboarding({
                 不开启
                 AI，也可以使用课表、资料同步和平台原文。截图识别需要看图模型。
               </p>
-              <label>
-                AI 提供方
-                <select
-                  aria-label="AI 提供方"
-                  value={ai.provider}
-                  onChange={(e) =>
-                    setAi({
-                      ...ai,
-                      provider: e.target.value,
-                      base_url:
-                        e.target.value === "ollama"
-                          ? "http://127.0.0.1:11434"
-                          : "https://api.openai.com/v1",
-                      text_model: "",
-                      vision_model: "",
-                      cloud_consent: false,
-                      api_key: "",
-                    })
-                  }
-                >
-                  <option value="none">暂不使用 AI</option>
-                  <option value="ollama">本机 Ollama</option>
-                  <option value="openai">自己的 OpenAI 兼容 API</option>
-                </select>
-              </label>
-              {ai.provider !== "none" && (
-                <>
-                  <label>
-                    服务地址
-                    <input
-                      value={ai.base_url}
-                      onChange={(e) =>
-                        setAi({
-                          ...ai,
-                          base_url: e.target.value,
-                          cloud_consent: false,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    文字模型
-                    <input
-                      value={ai.text_model}
-                      onChange={(e) =>
-                        setAi({ ...ai, text_model: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    看图模型（可选）
-                    <input
-                      value={ai.vision_model}
-                      onChange={(e) =>
-                        setAi({ ...ai, vision_model: e.target.value })
-                      }
-                    />
-                  </label>
-                  {ai.provider === "openai" ? (
-                    <>
-                      <label>
-                        API Key
-                        <input
-                          type="password"
-                          autoComplete="off"
-                          value={ai.api_key}
-                          placeholder={
-                            settings.api_key_set
-                              ? "已保存，留空保留"
-                              : "填写自己的密钥"
-                          }
-                          onChange={(e) =>
-                            setAi({ ...ai, api_key: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={ai.cloud_consent}
-                          onChange={(e) =>
-                            setAi({ ...ai, cloud_consent: e.target.checked })
-                          }
-                        />
-                        我同意把待处理课堂文本或课表截图发送至 {ai.base_url}
-                        ，并承担该服务产生的费用。
-                      </label>
-                    </>
-                  ) : (
-                    <p>
-                      <a
-                        href="https://ollama.com/download/windows"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        安装 Ollama
-                      </a>{" "}
-                      后，先在本机准备要使用的模型。
-                    </p>
-                  )}
-                </>
-              )}
-              <div className="toolbar">
-                <button
-                  onClick={() =>
-                    void action(async () => {
-                      await request("/api/setup/ai", ai, "PUT");
-                      setAi({ ...ai, api_key: "" });
-                      await refresh();
-                      setNotice("AI 配置已保存；尚未测试连接");
-                    })
-                  }
-                >
-                  保存 AI 配置
-                </button>
-                <button
-                  disabled={ai.provider === "none"}
-                  onClick={() =>
-                    void action(async () => {
-                      await request("/api/setup/ai", ai, "PUT");
-                      setAi({ ...ai, api_key: "" });
-                      await refresh();
-                      await request("/api/setup/ai/test");
-                      setNotice(
-                        "文字模型连接和 JSON 输出验证通过；看图能力请在课表识别时验证",
-                      );
-                    })
-                  }
-                >
-                  保存并测试文字模型
-                </button>
-                <button onClick={() => void action(() => go(2))}>
-                  返回课表识别
-                </button>
-              </div>
-              <p>AI 表单请点保存后再离开；未保存的密钥不会写入草稿。</p>
+              <AISettings value={ai} onChange={setAi} onSaved={refresh} />
+              <button onClick={() => void action(() => go(2))}>返回课表识别</button>
             </section>
             <section>
               <h2>默认回放模式</h2>
-              <label>
-                处理方式
-                <select
-                  value={draft.replay_mode}
-                  onChange={(e) => update("replay_mode", e.target.value)}
-                >
-                  <option value="text">
-                    文本模式：获取平台文字，不下载视频
-                  </option>
-                  <option value="illustrated">
-                    图文模式：下载视频并提取画面
-                  </option>
-                </select>
-              </label>
+              <ReplayMode value={draft.replay_mode} onChange={(mode) => update("replay_mode", mode)} />
               <p>
                 可在工作台按课程单独修改。没有平台文字时，可再选择安装 Whisper
                 本地转写。
@@ -1055,7 +910,7 @@ export default function Onboarding({
                 </li>
                 <li>空中课堂：{statusText(platform.kzkt)}</li>
                 <li>
-                  AI：
+                  文字 AI：
                   {
                     (
                       {
@@ -1065,6 +920,9 @@ export default function Onboarding({
                       } as any
                     )[settings.settings?.ai?.provider || "none"]
                   }
+                  ；看图：{(settings.settings?.ai?.vision_reuse === false
+                    ? settings.settings?.ai?.vision_service?.vision_model
+                    : settings.settings?.ai?.vision_model) || "未配置"}
                 </li>
                 <li>
                   默认回放：
