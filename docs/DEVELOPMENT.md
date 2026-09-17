@@ -26,7 +26,7 @@ python scripts/check-publication.py
 
 ## 接口
 
-- `/api/setup`：用户目录、学期、节次与默认回放模式。
+- `/api/setup`：用户目录、学期与默认回放模式；节次使用内置上财时间表。
 - `/api/setup/timetable/{preview,csv,recognize,confirm}`：导入草稿与确认。预览及识别不写课程数据库。
 - `/api/setup/ai`、`/api/setup/ai/test`：模型配置与实际连接测试；秘密不回显。
 - `/api/connections/*`：独立登录、识别账号、绑定与企微只读配置。

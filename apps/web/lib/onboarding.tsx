@@ -546,67 +546,7 @@ export default function Onboarding({
                   />
                 </label>
               </div>
-              <details>
-                <summary>节次时间（截图识别时使用）</summary>
-                <p>请按学校实际时间填写；手动录入课表可以直接填写起止时间。</p>
-                {draft.periods.map((p, i) => (
-                  <div className="toolbar" key={i}>
-                    <span>第 {p.number} 节</span>
-                    <input
-                      aria-label={`第 ${p.number} 节开始`}
-                      type="time"
-                      value={p.start}
-                      onChange={(e) =>
-                        update(
-                          "periods",
-                          draft.periods.map((v, j) =>
-                            j === i ? { ...v, start: e.target.value } : v,
-                          ),
-                        )
-                      }
-                    />
-                    <input
-                      aria-label={`第 ${p.number} 节结束`}
-                      type="time"
-                      value={p.end}
-                      onChange={(e) =>
-                        update(
-                          "periods",
-                          draft.periods.map((v, j) =>
-                            j === i ? { ...v, end: e.target.value } : v,
-                          ),
-                        )
-                      }
-                    />
-                    <button
-                      onClick={() =>
-                        update(
-                          "periods",
-                          draft.periods.filter((_, j) => j !== i),
-                        )
-                      }
-                    >
-                      删除节次
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() =>
-                    update("periods", [
-                      ...draft.periods,
-                      {
-                        number:
-                          Math.max(0, ...draft.periods.map((p) => p.number)) +
-                          1,
-                        start: "08:00",
-                        end: "08:45",
-                      },
-                    ])
-                  }
-                >
-                  添加节次
-                </button>
-              </details>
+              <p>已内置上财节次时间，截图中的节次会自动换算，无需配置。</p>
               <button onClick={() => void action(saveTerm)}>保存学期</button>
             </section>
             <section>

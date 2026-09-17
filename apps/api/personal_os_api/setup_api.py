@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from .config import get_settings, save_settings, data_root
 from .db import get_db
+from .sufe_timetable import sufe_periods
 from .models import AcademicTerm, AcademicCourse, Project, ProjectStatus, AutomationProfile, CalendarItem, CalendarItemType, ClassSession, DeliveryMode, CourseMeetingRule
 from .ai_provider import store_key, chat_json, validate_config
 
@@ -25,21 +26,19 @@ class Setup(BaseModel):
     term_name: str = Field(min_length=1, max_length=100)
     starts_on: date
     teaching_weeks: int = Field(default=18, ge=1, le=52)
-    periods: list[dict] = Field(default_factory=list)
     replay_mode: Literal['text', 'illustrated']
 
     @model_validator(mode='after')
     def check(self):
         if self.starts_on.weekday() != 0: raise ValueError('学期第一周起始日请选择周一')
         if not Path(self.storage_root).is_absolute(): raise ValueError('资料目录必须是绝对路径')
-        for p in self.periods:
-            if time.fromisoformat(p['start']) >= time.fromisoformat(p['end']): raise ValueError('节次结束时间必须晚于开始时间')
         return self
 
 
 @router.get('')
 def status():
     cfg = dict(get_settings().values)
+    cfg["periods"] = sufe_periods()
     return {'configured': bool(cfg.get('term_id')), 'settings': cfg, 'api_key_set': (data_root() / 'api-key.dpapi').exists(), 'default_storage_root': get_settings().academic_storage_root}
 
 
@@ -60,7 +59,7 @@ def configure(body: Setup, db=Depends(get_db)):
     else:
         term.name=body.term_name; term.starts_on=body.starts_on; term.teaching_weeks=body.teaching_weeks
     db.commit(); db.refresh(term)
-    cfg.update(body.model_dump(mode='json')); cfg['storage_root']=str(root); cfg['term_id']=str(term.id)
+    cfg.update(body.model_dump(mode='json')); cfg['storage_root']=str(root); cfg['term_id']=str(term.id); cfg['periods']=sufe_periods()
     save_settings(cfg)
     return status()
 
@@ -160,7 +159,7 @@ def recognize(body: Screenshot):
     try: base64.b64decode(body.image.split(',',1)[1],validate=True)
     except ValueError: raise HTTPException(422,'图片编码无效')
     settings=get_settings().values
-    prompt='识别课表图片。只输出 JSON，格式为 '+json.dumps(Timetable.model_json_schema(),ensure_ascii=False)+'。weekday 周一为0；weeks 是实际教学周序号。不可识别或缺少必填信息的条目不要猜测，省略该条目。已配置节次：'+json.dumps(settings.get('periods',[]),ensure_ascii=False)
+    prompt='识别课表图片。只输出 JSON，格式为 '+json.dumps(Timetable.model_json_schema(),ensure_ascii=False)+'。weekday 周一为0；weeks 是实际教学周序号。不可识别或缺少必填信息的条目不要猜测，省略该条目。统一使用上财节次时间（截图仅写节次时按此表换算起止时间；截图明确写出时间时保留原文时间供用户核对）：'+json.dumps(sufe_periods(),ensure_ascii=False)
     try:
         result=chat_json(prompt,image=body.image)
         return {**validate_rows(Timetable.model_validate(result)), 'notice':'AI 可能遗漏或识别错误，请逐项与原图核对；尚未导入'}

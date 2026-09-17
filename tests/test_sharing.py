@@ -185,3 +185,18 @@ def test_queue_commits_text_before_optional_media(isolated_settings,db,mode):
             browser.reset_mock()
             advance(db,job);assert job.stage=='transcribe'
             browser.assert_not_called()
+
+
+def test_screenshot_uses_shared_sufe_periods_even_with_old_settings(isolated_settings):
+    from personal_os_api.setup_api import recognize,Screenshot,status
+    from personal_os_api.sufe_timetable import sufe_periods
+    save_settings({'periods':[{'number':3,'start':'01:00','end':'02:00'}]})
+    with patch('personal_os_api.setup_api.chat_json',return_value={'rows':[sample().model_dump(mode='json')]}) as model:
+        recognize(Screenshot(image='data:image/png;base64,AA=='))
+    prompt=model.call_args.args[0]
+    assert '10:05' in prompt and '18:55' in prompt and '01:00' not in prompt
+    assert status()['settings']['periods']==sufe_periods()
+    periods=sufe_periods()
+    assert (periods[2]['start'],periods[3]['end'])==('10:05','11:45')
+    assert (periods[5]['start'],periods[6]['end'])==('13:20','15:00')
+    assert (periods[11]['start'],periods[12]['end'])==('18:55','20:35')

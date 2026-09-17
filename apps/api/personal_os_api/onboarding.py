@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from .config import data_root, get_settings
 from .db import get_db
+from .sufe_timetable import sufe_periods
 from .connections import browser_executable
 
 router = APIRouter(prefix='/api/onboarding', tags=['onboarding'])
@@ -25,7 +26,7 @@ class Draft(BaseModel):
     starts_on: str = Field(default='', max_length=10)
     teaching_weeks: int = Field(default=18, ge=1, le=52)
     replay_mode: Literal['text', 'illustrated'] = 'text'
-    periods: list[dict] = Field(default_factory=list, max_length=30)
+    periods: list[dict] = Field(default_factory=sufe_periods, max_length=30)
     rows: list[dict] = Field(default_factory=list, max_length=300)
 
 
@@ -42,7 +43,7 @@ class Draft(BaseModel):
     def safe_periods(cls, periods):
         if any(set(period) - {'number','start','end'} for period in periods):
             raise ValueError('节次只接受序号和时间')
-        return periods
+        return sufe_periods()
 
 
 class Progress(BaseModel):
@@ -55,7 +56,9 @@ def read_state():
     path = data_root() / 'onboarding.json'
     if path.exists():
         try:
-            return json.loads(path.read_text('utf-8'))
+            state = json.loads(path.read_text('utf-8'))
+            state.setdefault('draft', {})['periods'] = sufe_periods()
+            return state
         except (OSError, ValueError):
             pass
     cfg = get_settings().values
