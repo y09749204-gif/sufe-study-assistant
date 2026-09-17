@@ -260,5 +260,3 @@ def reconcile_acquisitions(db: Session) -> int:
             updated += 1
     if updated: db.commit()
     return updated
-
-

@@ -13,6 +13,7 @@
 | Node.js | MIT 及其发行版附带第三方许可 | 浏览器脚本 |
 | FastAPI / SQLAlchemy / Alembic / Pydantic / HTTPX | MIT | API 与数据模型 |
 | psycopg | LGPL-3.0 系列，具体以所分发版本为准 | 数据库驱动 |
+| cryptography | Apache-2.0 / BSD；保留 wheel 附带许可 | 本地加密支持 |
 | pypdf | BSD-3-Clause | PDF 文本 |
 | OpenCV | Apache-2.0；发行包另含第三方组件 | 视频画面 |
 | Pillow | HPND 系列许可 | 图像处理 |

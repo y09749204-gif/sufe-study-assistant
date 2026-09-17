@@ -16,7 +16,7 @@ app.whenReady().then(()=>{
  host.stdout.on('data',chunk=>{buffer+=chunk;let n;while((n=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,n);buffer=buffer.slice(n+1);try{const msg=JSON.parse(line);if(msg.url){origin=new URL(msg.url).origin;window.loadURL(msg.url);}if(msg.error)dialog.showErrorBox('启动失败',msg.error);}catch{}}});
  host.on('error',()=>dialog.showErrorBox('启动失败','运行环境未准备好。开发者请先运行 prepare-runtime.py。'));
  host.on('exit',code=>{if(code)dialog.showErrorBox('服务已退出','请查看应用数据目录中的 logs/host.log。')});
- window.webContents.setWindowOpenHandler(({url})=>{if(/^https?:\/\//.test(url))void shell.openExternal(url);return {action:'deny'}});
+ window.webContents.setWindowOpenHandler(({url})=>{if(origin&&new URL(url).origin===origin)return {action:'allow',overrideBrowserWindowOptions:{webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}}};if(/^https?:\/\//.test(url))void shell.openExternal(url);return {action:'deny'}});
  window.webContents.on('will-navigate',(event,url)=>{if(origin&&new URL(url).origin!==origin)event.preventDefault()});
  window.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  window.on('closed',()=>app.quit());

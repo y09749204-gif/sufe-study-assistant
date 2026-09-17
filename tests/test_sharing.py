@@ -123,3 +123,35 @@ def test_key_does_not_appear_in_status(isolated_settings):
     with patch('personal_os_api.setup_api.store_key'):
         configure_ai(AIConfig(provider='openai',base_url='https://example.com/v1',text_model='test',cloud_consent=True,api_key='test-secret-not-real'))
     assert 'test-secret' not in str(status())
+
+
+def test_whisper_lazy_cuda_failure_restarts_on_cpu(isolated_settings,monkeypatch):
+    import sys,json
+    from types import SimpleNamespace
+    from personal_os_api.kzkt import transcribe_locally
+    root=isolated_settings/'courses';root.mkdir();media=root/'fake.wav';media.write_bytes(b'test')
+    save_settings({'storage_root':str(root),'whisper_enabled':True})
+    devices=[]
+    class FakeModel:
+        def __init__(self,*args,device,**kwargs):
+            assert kwargs['local_files_only'] is True
+            self.device=device;devices.append(device)
+        def transcribe(self,*args,**kwargs):
+            def chunks():
+                if self.device=='cuda':
+                    yield SimpleNamespace(start=0,end=1,text='discard partial GPU result')
+                    raise RuntimeError('CUDA runtime unavailable')
+                yield SimpleNamespace(start=0,end=2,text='CPU result')
+            return chunks(),SimpleNamespace(duration=2)
+    monkeypatch.setitem(sys.modules,'faster_whisper',SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setitem(sys.modules,'ctranslate2',SimpleNamespace(get_cuda_device_count=lambda:1))
+    text,segments=transcribe_locally(SimpleNamespace(local_path=str(media)))
+    assert devices==['cuda','cpu'] and text=='CPU result' and len(segments)==1
+    assert json.loads((root/'.runtime/kzkt/status.json').read_text('utf-8'))['fallback'] is True
+
+
+def test_health_does_not_contact_unconfigured_ai(isolated_settings):
+    from personal_os_api.kzkt import runtime_health
+    with patch('httpx.get') as get:
+        runtime_health()
+        get.assert_not_called()

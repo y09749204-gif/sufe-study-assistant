@@ -57,54 +57,20 @@ async function post(path, payload) {
   });
 }
 
-async function directMedia(context, url, externalId, title, onProgress) {
-  if (command === "discover" || process.env.KZKT_DOWNLOAD_MEDIA === "false") return null;
-  if (!url || !allowed(url) || !/\.(mp4|webm|m4v)(?:\?|$)/i.test(url)) return null;
-  const extension = new URL(url, baseUrl).pathname.match(/\.(mp4|webm|m4v)$/i)?.[0] || ".mp4";
-  const directory = join(downloadRoot, safeName(externalId)); mkdirSync(directory, { recursive: true });
-  const temporary = join(directory, `${safeName(title)}${extension}.part`);
-  const cookies = await context.cookies(new URL(url, baseUrl).href);
-  const cookieHeader = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
-  const headers = cookieHeader ? {cookie:cookieHeader} : {};
-  const head = await fetch(new URL(url,baseUrl).href,{method:"HEAD",redirect:"error",headers,signal:AbortSignal.timeout(60000)});
-  if (!head.ok) throw new Error(`回放下载失败：${head.status}`);
-  const totalBytes = Number(head.headers.get("content-length") || 0);
-  const disk = statfsSync(storageRoot);
-  if (disk.bavail * disk.bsize < totalBytes + 5 * 1024 ** 3) throw new Error("存储空间不足：保留至少 5 GB 后无法下载此回放");
-  const hash = createHash("sha256");
-  let downloadedBytes = 0;
-  writeFileSync(temporary, Buffer.alloc(0));
-  try {
-    if (totalBytes > 0 && head.headers.get("accept-ranges") === "bytes") {
-      // Commit only complete bounded blocks. A interrupted HTTP body never
-      // corrupts the partial file/hash, and large lectures avoid long streams.
-      while (downloadedBytes < totalBytes) {
-        const end = Math.min(totalBytes - 1, downloadedBytes + 32 * 1024 ** 2 - 1);
-        let data;
-        for (let attempt=0; attempt<3; attempt++) {
-          try {
-            const response = await fetch(new URL(url,baseUrl).href,{redirect:"error",headers:{...headers,Range:`bytes=${downloadedBytes}-${end}`},signal:AbortSignal.timeout(90000)});
-            if (response.status!==206 || response.headers.get("content-range")!==`bytes ${downloadedBytes}-${end}/${totalBytes}`) { await response.body?.cancel(); throw new Error("媒体分段响应不一致"); }
-            data=Buffer.from(await response.arrayBuffer());
-            if (data.length!==end-downloadedBytes+1) throw new Error("媒体分段不完整");
-            break;
-          } catch(error) { if(attempt===2)throw error; await new Promise(resolve=>setTimeout(resolve,1000)); }
-        }
-        appendFileSync(temporary,data);hash.update(data);downloadedBytes+=data.length;
-        onProgress?.({downloadedBytes,totalBytes});
-      }
-    } else {
-      const response=await fetch(new URL(url,baseUrl).href,{redirect:"error",headers});
-      if(!response.ok || !response.body)throw new Error(`回放下载失败：${response.status}`);
-      await pipeline(Readable.fromWeb(response.body),async function*(source){for await(const chunk of source){hash.update(chunk);downloadedBytes+=chunk.length;onProgress?.({downloadedBytes,totalBytes});yield chunk;}},createWriteStream(temporary));
-      if(totalBytes && downloadedBytes!==totalBytes)throw new Error("媒体下载长度不一致");
-    }
-  } catch(error) {rmSync(temporary,{force:true});throw error;}
-  const digest = hash.digest("hex");
-  const destination = join(directory, `${digest.slice(0, 12)}-${safeName(title)}${extension}`);
-  if (existsSync(destination)) rmSync(temporary, { force: true }); else renameSync(temporary, destination);
-  onProgress?.({ downloadedBytes, totalBytes, complete: true });
-  return { local_path: destination, media_sha256: digest };
+async function directMedia(context,url,externalId,title,onProgress){
+  if(command === "discover" || process.env.KZKT_DOWNLOAD_MEDIA === "false")return null;
+  if(!url || !allowed(url) || !/\.(mp4|webm|m4v)(?:\?|$)/i.test(url))return null;
+  const extension=new URL(url,baseUrl).pathname.match(/\.(mp4|webm|m4v)$/i)?.[0]||".mp4";
+  const directory=join(downloadRoot,safeName(externalId));mkdirSync(directory,{recursive:true});
+  const temporary=join(directory,`${safeName(title)}${extension}.part`);
+  const cookies=await context.cookies(new URL(url,baseUrl).href);
+  const headers={cookie:cookies.map(c=>`${c.name}=${c.value}`).join("; ")};
+  const {downloadFile}=await import("./media.mjs");
+  const result=await downloadFile(new URL(url,baseUrl).href,temporary,{headers,storageRoot,onProgress});
+  const destination=join(directory,`${result.digest.slice(0,12)}-${safeName(title)}${extension}`);
+  if(existsSync(destination))rmSync(temporary,{force:true});else renameSync(temporary,destination);
+  rmSync(result.journal,{force:true});onProgress?.({downloadedBytes:result.bytes,totalBytes:result.total,complete:true});
+  return {local_path:destination,media_sha256:result.digest};
 }
 
 async function discover(page, context) {

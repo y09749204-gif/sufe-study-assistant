@@ -137,29 +137,3 @@ class DayPlanResult(BaseModel):
     created_blocks: list[CalendarItemRead]
     skipped: list[str]
     issues: list[SchedulingIssue]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

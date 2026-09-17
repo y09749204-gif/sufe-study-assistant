@@ -18,6 +18,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://sufe:test-only-password@127.0.0.1:5432/sufe_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -26,7 +28,9 @@ jobs:
           node-version: '22'
       - run: python -m pip install -r apps/api/requirements-dev.txt
       - run: python -m pytest -q
-      - run: node --test integrations/kzkt-browser/parsers.test.mjs
+      - run: npm ci --prefix integrations/kzkt-browser
+      - run: npx --prefix integrations/kzkt-browser playwright-core install --with-deps chromium
+      - run: node --test integrations/kzkt-browser/*.test.mjs
       - run: npm ci --prefix apps/web
       - run: npm run typecheck --prefix apps/web
       - run: npm run build --prefix apps/web

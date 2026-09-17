@@ -42,6 +42,8 @@ def runtime_health() -> dict:
         result["whisper_cuda_ready"] = result["cuda_devices"] > 0 and "int8_float16" in ctranslate2.get_supported_compute_types("cuda")
     except Exception as exc:
         result.update(whisper_cuda_ready=False, whisper_error=str(exc))
+    if get_settings().values.get("ai", {}).get("provider", "none") != "ollama":
+        return result
     try:
         response = httpx.get(f"{get_settings().kzkt_ollama_base_url.rstrip('/')}/api/tags", timeout=3, trust_env=False)
         response.raise_for_status()
@@ -207,17 +209,38 @@ def transcribe_locally(recording: CourseRecording) -> tuple[str, list[dict]]:
     cfg=get_settings().values
     if not cfg.get("whisper_enabled"): raise RuntimeError("请先在设置中启用并下载本地转写组件")
     import ctranslate2
-    gpu=cfg.get("whisper_device","auto") != "cpu" and ctranslate2.get_cuda_device_count()>0
-    model = WhisperModel(get_settings().kzkt_whisper_model, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8", local_files_only=True,
-        download_root=str(storage_root().parent / "WhisperCache" / "hub"))
-    chunks, info = model.transcribe(str(media), language="zh", vad_filter=True)
-    segments = []
-    last_report = -30
-    for chunk in chunks:
-        if chunk.text.strip(): segments.append({"start": round(chunk.start, 2), "end": round(chunk.end, 2), "text": chunk.text.strip()})
-        if chunk.end - last_report >= 30:
-            last_report = chunk.end
-            (storage_root()/".runtime"/"kzkt"/"status.json").write_text(json.dumps({"status":"syncing","message":"Whisper 正在本地转写课堂音频","progress":{"stage":"transcribing","current":round(chunk.end),"total":round(info.duration),"percent":round(100*chunk.end/max(info.duration,1))}},ensure_ascii=False),encoding="utf-8")
+    status_path = storage_root()/".runtime"/"kzkt"/"status.json"
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    def report(message, **extra):
+        status_path.write_text(json.dumps({"status": "syncing", "message": message, **extra}, ensure_ascii=False), encoding="utf-8")
+    try:
+        gpu = cfg.get("whisper_device", "auto") != "cpu" and ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        gpu = False
+    def run(device, fallback=False):
+        model = WhisperModel(get_settings().kzkt_whisper_model, device=device,
+            compute_type="int8_float16" if device == "cuda" else "int8", local_files_only=True,
+            download_root=str(storage_root().parent / "WhisperCache" / "hub"))
+        chunks, info = model.transcribe(str(media), language="zh", vad_filter=True)
+        result, last_report = [], -30
+        for chunk in chunks:
+            if chunk.text.strip():
+                result.append({"start": round(chunk.start, 2), "end": round(chunk.end, 2), "text": chunk.text.strip()})
+            if chunk.end - last_report >= 30:
+                last_report = chunk.end
+                report("CUDA 不可用，已回退 CPU 本地转写" if fallback else f"Whisper 正在使用 {device.upper()} 本地转写",
+                    device=device, fallback=fallback,
+                    progress={"stage": "transcribing", "current": round(chunk.end), "total": round(info.duration), "percent": round(100*chunk.end/max(info.duration, 1))})
+        return result
+    if gpu:
+        try:
+            segments = run("cuda")
+        except (RuntimeError, OSError):
+            report("CUDA 转写失败，正在回退 CPU", device="cpu", fallback=True)
+            segments = run("cpu", fallback=True)
+    else:
+        report("未启用可用 CUDA，使用 CPU 本地转写", device="cpu")
+        segments = run("cpu")
     if not segments:
         raise RuntimeError("Whisper 未识别到可用的课堂文本")
     return "\n".join(chunk["text"] for chunk in segments), segments

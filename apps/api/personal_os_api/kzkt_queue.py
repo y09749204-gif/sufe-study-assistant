@@ -121,7 +121,6 @@ def advance(db,job):
             job.recording_id=uuid.UUID(report['recording_ids'][0]);db.commit()
         job.stage='review';job.status='queued'
     elif job.stage=='review':
-        health=runtime_health()
         record=db.get(CourseRecording,job.recording_id)
         if not (record.metadata_ or {}).get('subtitle_text') and not get_settings().values.get('whisper_enabled'): raise RuntimeError('尚无字幕，请启用本地转写并使用图文模式下载媒体')
         job.result={**job.result,'review':process_recording(db,record)};job.stage='slides' if get_settings().values.get('course_modes',{}).get(str(course.id),get_settings().values.get('replay_mode','text'))=='illustrated' else 'complete';job.status='queued' if job.stage=='slides' else 'success'

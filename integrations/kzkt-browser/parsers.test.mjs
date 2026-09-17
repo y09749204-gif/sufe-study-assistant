@@ -23,8 +23,8 @@ test('lesson date belongs to its displayed week, including year boundary', () =>
   assert.throws(() => episodeDate('2026.09.14 - 2026.09.20', '8月15日'));
 });
 test('speech extraction preserves TeX once and excludes the timestamp', async () => {
-  const {default: pw} = await import('../canvas-browser/node_modules/playwright-core/index.js');
-  const browser = await pw.chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+  const {default: pw} = await import('playwright-core');
+  const browser = await pw.chromium.launch({headless:true,...(process.env.SUFE_TEST_BROWSER ? {executablePath:process.env.SUFE_TEST_BROWSER} : {})});
   try {
     const page = await browser.newPage();
     await page.setContent('<div class="paragraph"><div class="point_in">00:11:51</div><span>当 <span class="katex"><span class="katex-mathml"><math><semantics><annotation encoding="application/x-tex">a_{11}a_{22}</annotation></semantics></math></span><span class="katex-html">重复渲染</span></span> 非零时。</span></div>');
